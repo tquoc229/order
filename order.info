@@ -1,0 +1,8 @@
+name = Order form
+description = Add order form to node, allow user order product. This module's written form tiemvaikimvan.com
+package = Custom
+core = 6.x
+version = "6.x-1.0"
+core = "6.x"
+project = "order"
+

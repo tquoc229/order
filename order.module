@@ -1,0 +1,176 @@
+<?php
+/**
+ * Hook menu()
+ * @return unknown_type
+ */
+function order_menu(){
+	$items = array();
+	$items['admin/settings/order'] = array(
+    'title' => 'Orders setting',
+    'description' => 'Choose what node type can order',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('order_admin_setting'),
+    'access arguments' => array('admin setting order'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'order.admin.inc',
+	);
+	return $items;
+}
+/**
+ * Order form
+ * @param $form_state
+ * @param $node
+ * @return unknown_type
+ */
+function order_form($form_state, $node){
+	$node = (object)$node;
+	$form = array();
+	$form['order'] = array(
+	  '#title' => 'Orders',
+	  '#type'  => 'fieldset',
+	  '#description' => 'Order product',
+	  '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+	  '#weight' => -7,
+	);
+	$form['order']['fullname'] = array(
+	  '#title' => t('Full name'),
+	  '#type' => 'textfield',
+	  '#description' => t('Enter your name.'),
+	  '#required' => TRUE,
+	  '#weight' => -6,
+	);
+	$form['order']['address'] = array(
+    '#title' => t('Address'),
+    '#type' => 'textfield',
+	  '#required' => TRUE,
+    '#description' => t('Enter your address.'),
+	  '#weight' => -5,
+	);
+	$form['order']['email'] = array(
+    '#title' => t('Email'),
+    '#type' => 'textfield',
+    '#description' => t('Enter your email.'),
+	  '#required' => TRUE,
+	  '#weight' => -4,
+	);
+	$form['order']['phone'] = array(
+    '#title' => t('Phone'),
+    '#type' => 'textfield',
+    '#description' => t('Enter your phone.'),
+	  '#weight' => -3,
+	);
+	 
+	$form['order']['amount'] = array(
+    '#title' => t('Amount'),
+    '#type' => 'textfield',
+	  '#default' => 1,
+	  '#required' => TRUE,
+    '#description' => t('Amount of product.'),
+	  '#weight' => -2,
+	);
+	$form['order']['message'] = array(
+    '#title' => t('Message'),
+    '#type' => 'textarea',
+    '#description' => t('Enter your message.'),
+	  '#weight' => -1,
+	);
+	$form['order']['node_title'] = array(
+    '#type' => 'value',
+    '#value' => $node->title,
+	);
+	$form['order']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+	  '#weight' => 10,
+	);
+	return $form;
+}
+
+function order_theme(){
+  return array(
+    'order_form'=> array('arguments'=> 'form'),
+  );
+}
+
+function theme_order_form($form){
+	
+	$form['order']['captcha'] = $form['captcha'];
+	unset($form['captcha']);
+	return drupal_render($form);
+}
+
+function order_form_validate(&$form, $form_state){
+  if (!valid_email_address($form_state['values']['email'])) {
+    form_set_error('email',t('The e-mail address %mail is not valid.', array('%mail' => $form_state['values']['email'])));
+  }
+}
+
+function order_form_submit(&$form, $form_state){
+	$params = $form_state['values'];
+	drupal_mail('order', 'order_mail', variable_get('order_admin_mail','tquoc229@yahoo.com'), language_default(), $params);
+	drupal_mail('order', 'order_copy', $params['email'], language_default(), $params);
+	watchdog('mail', '%name-from sent an e-mail order.', array('%name-from' => $params['name'] ." [". $params['email']."]"));
+  drupal_set_message(t('Your order has been sent.'));
+}
+
+function order_mail($key, &$message, $params){
+	
+	
+	switch($key){
+		case 'order_mail':
+			$message['subject'].= t('Customer\'s order at !site',array('!site'=> variable_get('site_name','website')));
+      $message['body'][] = t("============= Customer info ===================== \n");
+      $message['body'][] = t('Fullname: %fullname',array('%fullname'=>$params['fullname']));
+      $message['body'][] = t('Address: %address',array('%address'=>$params['address']));
+      $message['body'][] = t('Email: %email',array('%email'=>$params['email']));
+      $message['body'][] = t('Phone: %phone',array('%phone'=>$params['phone']));
+      $message['body'][] = t('Message: %message',array('%message'=>$params['message']));
+			$message['body'][] = t("============= Order info ===================== \n");
+      $message['body'][] = t('Product: %product',array('%product'=>$params['node_title']));
+      $message['body'][] = t('Amount: %amount',array('%amount'=>$params['amount']));
+      $message['body'][] = t('Time: %time',array('%time'=> format_date(time())));
+      $message['body'][] = t("================================== \n");
+      break;
+		case 'order_copy':
+			$message['subject'].= t('Your order at !site',array('!site'=> variable_get('site_name','website')));
+			$message['body'][] = t('Hi %fullname',array('%fullname'=>$params['fullname']));
+			$message['body'][] = t('Thanks for your order at !site_name',array('!site_name'=>url('<front>',array('absolute'=>TRUE))));
+			$message['body'][] = t("============= Your order info ===================== \n");
+			$message['body'][] = t('Product: %product',array('%product'=>$params['node_title']));
+			$message['body'][] = t('Amount: %amount',array('%amount'=>$params['amount']));
+			$message['body'][] = t('Time: %time',array('%time'=> format_date(time())));
+			$message['body'][] = t("================================== \n");
+			break;
+	}
+}
+/**
+ * Implement hook nodeapi
+ * @param $node
+ * @param $op
+ * @param $teaser
+ * @return unknown_type
+ */
+function order_nodeapi(&$node, $op, $teaser){
+	switch ($op){
+		case 'load':
+			$output = array();
+			$node_types = variable_get('order_node_types',array());
+			if($node_types[$node->type]){
+			  $output['order'] = drupal_get_form('order_form',$node);
+    		return $output;
+			}
+			break;
+		case 'view':
+			if (!$teaser) {
+				$node->content['order'] = array(
+              '#value' => $node->order,
+              '#weight' => 50,
+				);
+			}
+			break;
+	}
+}
+
+
+
